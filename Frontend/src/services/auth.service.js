@@ -1,9 +1,10 @@
 import api from "../api/axios";
+import { rotateApi } from "../api/axios";
 
 export  const registerUser = async (formData) =>{
     
     const response = await api.post("/auth/register",formData);
-    console.log("Response:", response);
+    // console.log("Response:", response);
     return response.data;
  
 }
@@ -28,7 +29,7 @@ export const verifyEmail = async (token) =>{
 }
 
 export const refreshAccessToken = async () =>{
-  const res = await api.get("/auth/rotateToken");
+  const res = await rotateApi.get("/auth/rotateToken");
 
   return res.data
 }

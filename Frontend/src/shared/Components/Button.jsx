@@ -9,7 +9,7 @@ export default function Button({
     <button
       type={type}
       className={`
-        w-full
+       
         rounded-md
         bg-[#238B57]
         px-6

@@ -8,6 +8,11 @@ const api = axios.create({
     withCredentials:true
 });
 
+export const rotateApi = axios.create({
+    baseURL:import.meta.env.VITE_API_URL,
+    withCredentials:true
+});
+
 // Request Interceptor
 api.interceptors.request.use(
   (config) => {
@@ -29,34 +34,47 @@ api.interceptors.request.use(
 );
 
 
-// Response Inteceptor 
 api.interceptors.response.use(
   (response) => response,
 
   async (error) => {
     const originalRequest = error.config;
 
+    console.log("Response Error:", error.response);
+
+    // Only handle expired ACCESS tokens here
     if (
       error.response?.status === 401 &&
-      error.response?.data?.code === "TOKEN_EXPIRED" &&
+      error.response?.data?.errors?.code === "TOKEN_EXPIRED" &&
       !originalRequest._retry
     ) {
+      console.log("Access token expired");
+
       originalRequest._retry = true;
 
       try {
-        const response = refreshAccessToken();
+        console.log("Trying to rotate refresh token...");
+
+        const response = await refreshAccessToken();
+
+        console.log("Refresh successful");
+
+        // Your response structure:
+        // response.data.accessToken
 
         useAuthStore
           .getState()
           .setAccessToken(response.data.accessToken);
 
-        // Retry the original request
+        // Retry the ORIGINAL request
         return api(originalRequest);
 
       } catch (refreshError) {
-        useAuthStore.getState().logout();
+        console.log("Refresh token/session is invalid");
 
-        window.location.href = "/auth";
+        useAuthStore
+          .getState()
+          .setSessionExpired(true);
 
         return Promise.reject(refreshError);
       }
@@ -66,5 +84,37 @@ api.interceptors.response.use(
   }
 );
 
-
 export default api;
+
+
+// class Solution {
+//     public long maximumSubarraySum(int[] nums, int k) {
+//         int maxSum = 0;
+//         int count = k;
+//         int sum = 0;
+
+//     HashMap<Integer , Integer> map = new HashMap<>();
+
+//         for(int i = 0; i<nums.length; i++){
+//             if(count == 0) {
+//                 if(map.size()==k){
+//                 maxSum = Math.max(maxSum,sum);
+//                 sum-=nums[i-k];
+                
+//                 map.remove(nums[i-k]);
+//                 }
+//                 else {
+//                 sum = 0;
+//                  }
+//                 map.remove(nums[i-k]);
+//                 count = 1;
+//             }
+
+//             map.put(nums[i], map.getOrDefault(nums[i], 0) + 1); // put element in the map
+//                 sum += nums[i];
+//                 count--;
+//         }
+        
+//         return maxSum;
+//     }
+// }

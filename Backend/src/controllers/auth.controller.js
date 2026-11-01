@@ -9,12 +9,16 @@ const {
 } = require("../utils/token.util");
 const { success, error } = require("../utils/apiResponse.util");
 
+const parseUserAgent = require("../utils/device.util");
+
+
 const crypto = require("crypto");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const sendEmail = require("../utils/brevo.util");
 
-const verificationTemplate = require("../utils/verificationMailTemplate")
+const verificationTemplate = require("../utils/verificationMailTemplate");
+const getIpLocation = require("../utils/getIpLocation.utils");
 
 /**
  * @route   POST /api/auth/register
@@ -93,6 +97,8 @@ async function login(req, res) {
   try {
     const { email, password } = req.body;
 
+    const locationDetails  = await getIpLocation(req.ip);
+
     // Find the user by email
     const user = await userModel.findOne({ email });
 
@@ -110,6 +116,7 @@ async function login(req, res) {
     // Check whether email is Verified
     if(!user.emailVerified){
       await emailVerificationModel.deleteMany({user:user._id});
+
        // Create a token for user to verify the email
       const verificationToken =crypto.randomBytes(32).toString("hex");
  
@@ -149,6 +156,8 @@ async function login(req, res) {
       ipAddress: req.ip,
       lastUsedAt:new Date(),
       expiresAt: getRefreshTokenExpiryDate(),
+      location:locationDetails
+      
     });
 
     // Generate a refresh token for this session
@@ -331,7 +340,9 @@ async function rotateToken(req, res) {
     const refreshToken = req.cookies.refreshToken;
 
     if (!refreshToken) {
-      return error(res, 401, "Refresh token not found");
+      return error(res, 401, "Refresh token not found",{
+        code:"REFRESH_TOKEN_EXPIRED_OR_INVALID"
+      });
     }
 
     // Verify the refresh token
@@ -344,12 +355,20 @@ async function rotateToken(req, res) {
     const session = await sessionModel.findById(decoded.sessionId);
 
     if (!session) {
-      return error(res, 401, "Session not found");
+      return error(res, 401, "Session not found",
+        {
+        code:"SESSION_EXPIRED"
+      }
+      );
     }
 
     // Check if the session has been revoked
     if (session.isRevoked) {
-      return error(res, 401, "Session has been revoked");
+      return error(res, 401, "Session has been revoked",
+        {
+        code:"SESSION_EXPIRED"
+      }
+      );
     }
 
     // Verify the refresh token matches the stored hash
@@ -359,7 +378,9 @@ async function rotateToken(req, res) {
     );
 
     if (!isValidToken) {
-      return error(res, 401, "Invalid refresh token");
+      return error(res, 401, "Invalid refresh token",{
+        code:"REFRESH_TOKEN_EXPIRED_OR_INVALID"
+      });
     }
 
     // Generate a new refresh token
@@ -397,7 +418,9 @@ async function rotateToken(req, res) {
     );
 
   } catch (err) {
-    return error(res, 401, "Invalid or expired refresh token");
+    return error(res, 401, "Invalid or expired refresh token",{
+       code:"REFRESH_TOKEN_EXPIRED_OR_INVALID"
+      });
   }
 }
 
@@ -515,4 +538,148 @@ async function getUser (req,res) {
 
 
 
-module.exports = { register ,login  , logout, logout_all_devices , rotateToken , verifyEmail ,getUser};
+  async function getActiveSessions(req, res) {
+  try {
+
+    // --------------------------------------------------
+    // 1. Get the current user's refresh token
+    // --------------------------------------------------
+
+    const refreshToken = req.cookies.refreshToken;
+
+    if (!refreshToken) {
+      return error(
+        res,
+        401,
+        "Refresh token not found.",
+        {
+          code: "REFRESH_TOKEN_NOT_FOUND",
+        }
+      );
+    }
+
+
+    // --------------------------------------------------
+    // 2. Verify refresh token
+    // --------------------------------------------------
+
+    let decoded;
+
+    try {
+      decoded = jwt.verify(
+        refreshToken,
+        process.env.REFRESH_TOKEN_SECRET
+      );
+    } catch (err) {
+      return error(
+        res,
+        401,
+        "Invalid or expired refresh token.",
+        {
+          code: "REFRESH_TOKEN_INVALID",
+        }
+      );
+    }
+
+
+    // --------------------------------------------------
+    // 3. Get current session ID
+    // --------------------------------------------------
+
+    const currentSessionId = decoded.sessionId;
+
+
+    // --------------------------------------------------
+    // 4. Find all active sessions of the user
+    // --------------------------------------------------
+
+    const sessions = await sessionModel
+      .find({
+        user: req.user.id,
+        isRevoked: false,
+        expiresAt: {
+          $gt: new Date(),
+        },
+      })
+      .sort({
+        lastUsedAt: -1,
+      });
+
+
+    // --------------------------------------------------
+    // 5. Format sessions for frontend
+    // --------------------------------------------------
+
+    const formattedSessions = sessions.map((session) => {
+
+      const deviceInfo = parseUserAgent(
+        session.userAgent
+      );
+
+
+      // Check whether this is the current session
+      const isCurrent =
+        session._id.toString() ===
+        currentSessionId.toString();
+
+
+      return {
+        id: session._id,
+
+        device: deviceInfo.device,
+
+        browser: deviceInfo.browser,
+
+        browserVersion: deviceInfo.browserVersion,
+
+        os: deviceInfo.os,
+
+        osVersion: deviceInfo.osVersion,
+
+        location: session.location,
+
+        lastUsedAt: session.lastUsedAt,
+
+        isCurrent,
+      };
+    });
+
+
+    // --------------------------------------------------
+    // 6. Send response
+    // --------------------------------------------------
+
+    return success(
+      res,
+      200,
+      "Active sessions fetched successfully.",
+      {
+        sessions: formattedSessions,
+      }
+    );
+
+  } catch (err) {
+
+    console.error(
+      "Get Active Sessions Error:",
+      err
+    );
+
+    return error(
+      res,
+      500,
+      "Unable to fetch active sessions", err.message
+    );
+  }
+}
+
+
+  
+
+
+
+
+
+
+
+module.exports = { register ,login  , logout, logout_all_devices , rotateToken , verifyEmail ,getUser , getActiveSessions};

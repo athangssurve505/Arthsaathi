@@ -40,3 +40,23 @@ export const registerSchema = z
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });
+
+
+
+export const changePasswordSchema = z.object({
+  currentPassword: loginSchema.shape.password,
+  newPassword: registerSchema.shape.password,
+  confirmNewPassword: z.string(),
+}).refine(
+  (data) => data.newPassword === data.confirmNewPassword,
+  {
+    message: "Passwords do not match",
+    path: ["confirmNewPassword"],
+  }
+).refine(
+    (data) => data.newPassword !== data.currentPassword,
+    {
+      message: "New password cannot be the same as current password",
+      path: ["newPassword"],
+    }
+  );

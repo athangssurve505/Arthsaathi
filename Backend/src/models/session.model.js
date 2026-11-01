@@ -25,6 +25,27 @@ const sessionSchema = new mongoose.Schema(
     ipAddress: {
       type: String,
       default: "",
+    }, 
+    location: {
+      country: {
+        type: String,
+        default: null,
+      },
+
+      region: {
+        type: String,
+        default: null,
+      },
+
+      city: {
+        type: String,
+        default: null,
+      },
+
+      timezone: {
+        type: String,
+        default: null,
+      },
     },
 
     isRevoked: {

@@ -4,6 +4,7 @@ const useAuthStore = create((set) => ({
   user: null,
   accessToken: null,
   isAuthenticated: false,
+  showSessionExpired:false,
 
   login: (user, accessToken) =>
     set({
@@ -28,6 +29,10 @@ const useAuthStore = create((set) => ({
     set({
       user
     })
+  },
+  setSessionExpired:(value)=>{
+     console.log("Setting session expired:", value);
+    set({showSessionExpired: value,})
   }
 }));
 

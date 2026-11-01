@@ -38,6 +38,18 @@ const loginSchema = z.object({
         .min(1, "Password is required")
 })
 
+
+const changePasswordSchema = z.object({
+  currentPassword: loginSchema.shape.password,
+  newPassword: registerSchema.shape.password,
+}).refine(
+    (data) => data.newPassword !== data.currentPassword,
+    {
+      message: "New password cannot be the same as current password",
+      path: ["newPassword"],
+    }
+  );
+
 module.exports = {
-    registerSchema , loginSchema
+    registerSchema , loginSchema , changePasswordSchema
 };
